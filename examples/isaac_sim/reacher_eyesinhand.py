@@ -36,7 +36,6 @@ simulation_app = SimulationApp(
 import numpy as np
 import torch
 from matplotlib import cm
-from nvblox_torch.datasets.realsense_dataset import RealsenseDataloader
 
 # CuRobo
 from curobo.geom.sdf.world import CollisionCheckerType
@@ -61,6 +60,10 @@ from omni.isaac.core import World
 from isaacsim.core.api.materials import OmniPBR
 from omni.isaac.core.objects import cuboid, sphere
 from omni.isaac.core.utils.types import ArticulationAction
+
+# camera related imports
+from omni.isaac.sensor import Camera
+from pxr import Usd, UsdGeom, Gf
 
 # CuRobo
 from curobo.util.usd_helper import UsdHelper
@@ -118,41 +121,29 @@ def draw_points(voxels):
     draw.draw_points(point_list, colors, sizes)
 
 
-def clip_camera(camera_data):
-    # clip camera image to bounding box:
+def clip_camera(depth_tensor):
+    """Clip camera image to bounding box for Isaac Sim camera"""
     h_ratio = 0.05
     w_ratio = 0.05
-    depth = camera_data["raw_depth"]
-    depth_tensor = camera_data["depth"]
+
+    if depth_tensor is None:
+        return None
+
     h, w = depth_tensor.shape
-    depth[: int(h_ratio * h), :] = 0.0
-    depth[int((1 - h_ratio) * h) :, :] = 0.0
-    depth[:, : int(w_ratio * w)] = 0.0
-    depth[:, int((1 - w_ratio) * w) :] = 0.0
 
-    depth_tensor[: int(h_ratio * h), :] = 0.0
-    depth_tensor[int(1 - h_ratio * h) :, :] = 0.0
-    depth_tensor[:, : int(w_ratio * w)] = 0.0
-    depth_tensor[:, int(1 - w_ratio * w) :] = 0.0
+    # Create a copy to avoid modifying original
+    depth_clipped = depth_tensor.copy()
 
+    # Clip borders
+    depth_clipped[: int(h_ratio * h), :] = 0.0
+    depth_clipped[int((1 - h_ratio) * h) :, :] = 0.0
+    depth_clipped[:, : int(w_ratio * w)] = 0.0
+    depth_clipped[:, int((1 - w_ratio) * w) :] = 0.0
 
-def draw_line(start, gradient):
-    # Third Party
-    try:
-        from omni.isaac.debug_draw import _debug_draw
-    except ImportError:
-        from isaacsim.util.debug_draw import _debug_draw
+    # Clip by distance
+    depth_clipped[depth_clipped > clipping_distance] = 0.0
 
-    draw = _debug_draw.acquire_debug_draw_interface()
-    # if draw.get_num_points() > 0:
-    draw.clear_lines()
-    start_list = [start]
-    end_list = [start + gradient]
-
-    colors = [(0.0, 0, 0.8, 0.9)]
-
-    sizes = [10.0]
-    draw.draw_lines(start_list, end_list, colors, sizes)
+    return depth_clipped
 
 
 if __name__ == "__main__":
@@ -189,18 +180,6 @@ if __name__ == "__main__":
         visual_material=target_material_2,
     )
 
-    # Make a target to follow
-    camera_marker = cuboid.VisualCuboid(
-        "/World/camera_nvblox",
-        position=np.array([-0.05, 0.0, 0.45]),
-        # orientation=np.array([0.793, 0, 0.609,0.0]),
-        orientation=np.array([0.5, -0.5, 0.5, -0.5]),
-        # orientation=np.array([0.561, -0.561, 0.431,-0.431]),
-        color=np.array([0, 0, 1]),
-        size=0.01,
-    )
-    camera_marker.set_visibility(False)
-
     collision_checker_type = CollisionCheckerType.BLOX
     world_cfg = WorldConfig.from_dict(
         {
@@ -226,13 +205,42 @@ if __name__ == "__main__":
         load_yaml(join_path(get_world_configs_path(), "collision_wall.yml"))
     )
 
+    # 0 is table, 1 is wall
     world_cfg_table.cuboid[0].pose[2] -= 0.01
+    world_cfg_table.cuboid[1].pose[0] += 1.15  # bring wall infront of the robot
     usd_help = UsdHelper()
+
+    # Create end-effector camera
+    ee_camera_path = f"/World/panda/panda_link7/ee_camera"
+    ee_cam_prim = UsdGeom.Camera.Define(stage, ee_camera_path)
+    ee_cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, clipping_distance))
+    ee_cam_prim.GetFocalLengthAttr().Set(24.0)
+    ee_cam_prim.GetFocusDistanceAttr().Set(400.0)
+
+    # Set horizontal and vertical aperture for proper FOV
+    ee_cam_prim.GetHorizontalApertureAttr().Set(20.955)
+    ee_cam_prim.GetVerticalApertureAttr().Set(15.2908)
+
+    # Set relative transform to panda_hand
+    xform = UsdGeom.Xformable(ee_cam_prim)
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(Gf.Vec3d(0.1, 0.0, 0.05))  # Slightly forward and up
+    xform.AddOrientOp().Set(
+        # Gf.Quatf(0.7071068, 0.0, -0.7071068, 0.0)
+        Gf.Quatf(0.6532815, -0.2705981, -0.6532815, 0.2705981)
+    )  # Face away from robot link_0
+
+    ee_camera = Camera(
+        prim_path=ee_camera_path,
+        name="ee_camera",
+        frequency=30,  # Higher frequency for better tracking
+        resolution=(640, 480),
+    )
 
     usd_help.load_stage(my_world.stage)
     usd_help.add_world_to_stage(world_cfg_table.get_mesh_world(), base_frame="/World")
     world_cfg.add_obstacle(world_cfg_table.cuboid[0])
-    world_cfg.add_obstacle(world_cfg_table.cuboid[1])
+    # world_cfg.add_obstacle(world_cfg_table.cuboid[1])  # commented out to remove wall from collision check, since we want it to be detected from camera
     motion_gen_config = MotionGenConfig.load_from_robot_config(
         robot_cfg,
         world_cfg,
@@ -257,12 +265,8 @@ if __name__ == "__main__":
     motion_gen.warmup(warmup_js_trajopt=False)
 
     world_model = motion_gen.world_collision
-    realsense_data = RealsenseDataloader(clipping_distance_m=clipping_distance)
-    data = realsense_data.get_data()
 
-    camera_pose = Pose.from_list([0, 0, 0, 0.707, 0.707, 0, 0])
     i = 0
-    tensor_args = TensorDeviceType()
     target_list = [target, target_2]
     target_material_list = [target_material, target_material_2]
     for material in target_material_list:
@@ -277,6 +281,8 @@ if __name__ == "__main__":
     if not args.use_debug_draw:
         voxel_viewer = VoxelManager(100, size=render_voxel_size)
     cmd_step_idx = 0
+    camera_initialized = False
+
     while simulation_app.is_running():
         my_world.step(render=True)
 
@@ -284,78 +290,114 @@ if __name__ == "__main__":
             if i % 100 == 0:
                 print("**** Click Play to start simulation *****")
             i += 1
-            # if step_index == 0:
-            #    my_world.play()
             continue
+
         step_index = my_world.current_time_step_index
 
         if step_index <= 10:
-            # my_world.reset()
             robot._articulation_view.initialize()
             idx_list = [robot.get_dof_index(x) for x in j_names]
             robot.set_joint_positions(default_config, idx_list)
-
             robot._articulation_view.set_max_efforts(
                 values=np.array([5000 for i in range(len(idx_list))]), joint_indices=idx_list
             )
 
-        if step_index % 5 == 0.0:
-            # camera data updation
-            world_model.decay_layer("world")
-            data = realsense_data.get_data()
-            clip_camera(data)
-            cube_position, cube_orientation = camera_marker.get_local_pose()
-            camera_pose = Pose(
-                position=tensor_args.to_device(cube_position),
-                quaternion=tensor_args.to_device(cube_orientation),
-            )
+        # Initialize camera after robot is initialized
+        if step_index == 15 and not camera_initialized:
+            ee_camera.initialize()
+            ee_camera.add_distance_to_image_plane_to_frame()
+            ee_camera.add_distance_to_camera_to_frame()  # Alternative depth format
+            camera_initialized = True
+            print("Camera initialized")
 
-            data_camera = CameraObservation(  # rgb_image = data["rgba_nvblox"],
-                depth_image=data["depth"], intrinsics=data["intrinsics"], pose=camera_pose
-            )
-            data_camera = data_camera.to(device=tensor_args.device)
-            world_model.add_camera_frame(data_camera, "world")
-            world_model.process_camera_frames("world", False)
-            torch.cuda.synchronize()
-            world_model.update_blox_hashes()
+        if step_index % 5 == 0.0 and step_index > 20:  # Wait for camera to be ready
+            # Get camera data
+            frame_data = ee_camera.get_current_frame()
 
-            bounding = Cuboid("t", dims=[1, 1, 1.0], pose=[0, 0, 0, 1, 0, 0, 0])
-            voxels = world_model.get_voxels_in_bounding_box(bounding, voxel_size)
-            if voxels.shape[0] > 0:
-                voxels = voxels[voxels[:, 2] > voxel_size]
-                voxels = voxels[voxels[:, 0] > 0.0]
-                if args.use_debug_draw:
-                    draw_points(voxels)
-                else:
-                    voxels = voxels.cpu().numpy()
-                    voxel_viewer.update_voxels(voxels[:, :3])
 
-                voxel_viewer.update_voxels(voxels[:, :3])
-            else:
-                if not args.use_debug_draw:
-                    voxel_viewer.clear()
-            # draw_points(voxels)
+            print("Step Index:", step_index)
+            print("Camera Data Keys:", frame_data.keys() if frame_data is not None else None)
 
-        if args.show_window:
-            depth_image = data["raw_depth"]
-            color_image = data["raw_rgb"]
-            depth_colormap = cv2.applyColorMap(
-                cv2.convertScaleAbs(depth_image, alpha=100), cv2.COLORMAP_VIRIDIS
-            )
-            color_image = cv2.flip(color_image, 1)
-            depth_colormap = cv2.flip(depth_colormap, 1)
+            if frame_data is not None and "distance_to_image_plane" in frame_data:
+                # Get depth image
+                # depth_image = frame_data["distance_to_image_plane"]
+                depth_image = frame_data["distance_to_camera"]
 
-            images = np.hstack((color_image, depth_colormap))
+                # Clip and process depth
+                depth_clipped = clip_camera(depth_image)
 
-            cv2.namedWindow("NVBLOX Example", cv2.WINDOW_NORMAL)
-            cv2.imshow("NVBLOX Example", images)
-            key = cv2.waitKey(1)
-            # Press esc or 'q' to close the image window
-            if key & 0xFF == ord("q") or key == 27:
-                cv2.destroyAllWindows()
-                break
+                if depth_clipped is not None:
+                    # Convert to tensor
+                    depth_tensor = torch.from_numpy(depth_clipped).float().to(tensor_args.device)
 
-        if cmd_plan is None and step_index % 10 == 0:
+                    # Get camera pose from its world position
+                    cam_position, cam_orientation = ee_camera.get_world_pose()
+                    camera_pose = Pose(
+                        position=tensor_args.to_device(cam_position),
+                        quaternion=tensor_args.to_device(cam_orientation),
+                    )
+
+                    # Get intrinsics
+                    intrinsics = torch.tensor(ee_camera.get_intrinsics_matrix()).to(
+                        tensor_args.device
+                    )
+
+                    # Update world model with camera data
+                    world_model.decay_layer("world")
+
+                    data_camera = CameraObservation(
+                        depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
+                    )
+
+                    world_model.add_camera_frame(data_camera, "world")
+                    world_model.process_camera_frames("world", False)
+                    torch.cuda.synchronize()
+                    world_model.update_blox_hashes()
+
+                    # Get voxels for visualization
+                    bounding = Cuboid("t", dims=[1, 1, 1.0], pose=[0, 0, 0, 1, 0, 0, 0])
+                    voxels = world_model.get_voxels_in_bounding_box(bounding, voxel_size)
+
+                    if voxels.shape[0] > 0:
+                        voxels = voxels[voxels[:, 2] > voxel_size]
+                        voxels = voxels[voxels[:, 0] > 0.0]
+                        if args.use_debug_draw:
+                            draw_points(voxels)
+                        else:
+                            voxels = voxels.cpu().numpy()
+                            voxel_viewer.update_voxels(voxels[:, :3])
+                    else:
+                        if not args.use_debug_draw:
+                            voxel_viewer.clear()
+
+                # Display camera view if requested
+                if args.show_window and frame_data is not None:
+                    depth_display = frame_data.get("distance_to_image_plane", None)
+                    rgb_display = frame_data.get("rgb", None)
+
+                    if depth_display is not None and rgb_display is not None:
+                        # Convert depth to colormap
+                        depth_colormap = cv2.applyColorMap(
+                            cv2.convertScaleAbs(depth_display, alpha=100), cv2.COLORMAP_VIRIDIS
+                        )
+
+                        # RGB is in RGBA format, convert to RGB
+                        if rgb_display.shape[-1] == 4:
+                            rgb_display = rgb_display[:, :, :3]
+
+                        # Stack images side by side
+                        images = np.hstack((rgb_display, depth_colormap))
+
+                        cv2.namedWindow("Robot Camera View", cv2.WINDOW_NORMAL)
+                        cv2.imshow("Robot Camera View", images)
+                        key = cv2.waitKey(1)
+
+                        if key & 0xFF == ord("q") or key == 27:
+                            cv2.destroyAllWindows()
+                            break
+
+        # Motion planning logic remains the same
+        if cmd_plan is None and step_index % 10 == 0 and step_index > 20:
             # motion generation:
             for ks in range(len(target_material_list)):
                 if ks == target_idx:
@@ -376,62 +418,48 @@ if __name__ == "__main__":
 
             cube_position, cube_orientation = target_list[target_idx].get_world_pose()
 
-            # Set EE teleop goals, use cube for simple non-vr init:
-            ee_translation_goal = cube_position
-            ee_orientation_teleop_goal = cube_orientation
-
-            # compute curobo solution:
             ik_goal = Pose(
-                position=tensor_args.to_device(ee_translation_goal),
-                quaternion=tensor_args.to_device(ee_orientation_teleop_goal),
+                position=tensor_args.to_device(cube_position),
+                quaternion=tensor_args.to_device(cube_orientation),
             )
 
             result = motion_gen.plan_single(cu_js.unsqueeze(0), ik_goal, plan_config)
-            # ik_result = ik_solver.solve_single(ik_goal, cu_js.position.view(1,-1), cu_js.position.view(1,1,-1))
 
-            succ = result.success.item()  # ik_result.success.item()
+            succ = result.success.item()
             if succ:
                 cmd_plan = result.get_interpolated_plan()
                 cmd_plan = motion_gen.get_full_js(cmd_plan)
-                # get only joint names that are in both:
+
                 idx_list = []
                 common_js_names = []
                 for x in sim_js_names:
                     if x in cmd_plan.joint_names:
                         idx_list.append(robot.get_dof_index(x))
                         common_js_names.append(x)
-                # idx_list = [robot.get_dof_index(x) for x in sim_js_names]
 
                 cmd_plan = cmd_plan.get_ordered_joint_state(common_js_names)
-
                 cmd_idx = 0
                 target_idx += 1
                 if target_idx >= len(target_list):
                     target_idx = 0
-
             else:
-                carb.log_warn("Plan did not converge to a solution.  No action is being taken.")
+                carb.log_warn("Plan did not converge to a solution. No action is being taken.")
+
         if cmd_plan is not None:
             cmd_state = cmd_plan[cmd_idx]
-
-            # get full dof state
             art_action = ArticulationAction(
                 cmd_state.position.cpu().numpy(),
                 cmd_state.velocity.cpu().numpy(),
                 joint_indices=idx_list,
             )
-            # set desired joint angles obtained from IK:
             articulation_controller.apply_action(art_action)
             cmd_step_idx += 1
             if cmd_step_idx == 2:
                 cmd_idx += 1
                 cmd_step_idx = 0
-            # for _ in range(2):
-            #    my_world.step(render=False)
             if cmd_idx >= len(cmd_plan.position):
                 cmd_idx = 0
                 cmd_plan = None
-    realsense_data.stop_device()
-    print("finished program")
 
+    print("finished program")
     simulation_app.close()
