@@ -146,6 +146,43 @@ def clip_camera(depth_tensor):
     return depth_clipped
 
 
+def create_camera(camera_cfg, target_stage):
+    cam_path = f"/World/panda/{camera_cfg['link']}/{camera_cfg['name']}"
+    cam_prim = UsdGeom.Camera.Define(target_stage, cam_path)
+    cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, clipping_distance))
+    cam_prim.GetFocalLengthAttr().Set(_focallengthattr)
+    cam_prim.GetFocusDistanceAttr().Set(_focusdistanceattr)
+
+    # Set horizontal and vertical aperture for proper FOV
+    cam_prim.GetHorizontalApertureAttr().Set(_horizontalapertureattr)
+    cam_prim.GetVerticalApertureAttr().Set(_verticalapertureattr)
+
+    # Set relative transform to link
+    xform = UsdGeom.Xformable(cam_prim)
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(
+        Gf.Vec3d(
+            camera_cfg["translation"][0], camera_cfg["translation"][1], camera_cfg["translation"][2]
+        )
+    )
+    xform.AddOrientOp().Set(
+        Gf.Quatf(
+            camera_cfg["orientation"][0],
+            camera_cfg["orientation"][1],
+            camera_cfg["orientation"][2],
+            camera_cfg["orientation"][3],
+        )
+    )
+
+    camera = Camera(
+        prim_path=cam_path,
+        name=camera_cfg["name"],
+        frequency=camera_cfg["frequency"],
+        resolution=_resolution,
+    )
+    return camera
+
+
 if __name__ == "__main__":
     radius = 0.05
     act_distance = 0.4
@@ -210,32 +247,77 @@ if __name__ == "__main__":
     world_cfg_table.cuboid[1].pose[0] += 1.15  # bring wall infront of the robot
     usd_help = UsdHelper()
 
-    # Create end-effector camera
-    ee_camera_path = f"/World/panda/panda_link7/ee_camera"
-    ee_cam_prim = UsdGeom.Camera.Define(stage, ee_camera_path)
-    ee_cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, clipping_distance))
-    ee_cam_prim.GetFocalLengthAttr().Set(24.0)
-    ee_cam_prim.GetFocusDistanceAttr().Set(400.0)
+    # common params for body cams
+    _focallengthattr = 24.0
+    _focusdistanceattr = 400.0
+    _horizontalapertureattr = 20.955
+    _verticalapertureattr = 15.2908
+    _resolution = (640, 480)
 
-    # Set horizontal and vertical aperture for proper FOV
-    ee_cam_prim.GetHorizontalApertureAttr().Set(20.955)
-    ee_cam_prim.GetVerticalApertureAttr().Set(15.2908)
+    # TODO: fill values as noted in sketches
+    cameras_config = {
+        # front facing
+        "cam1": {
+            "name": "cam1",
+            "link": "panda_link2",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],  # scalar first (w, x, y, z)
+            "frequency": 30,
+        },
+        # left facing
+        "cam2": {
+            "name": "cam2",
+            "link": "panda_link3",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+        # right facing
+        "cam3": {
+            "name": "cam3",
+            "link": "panda_link4",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+        # left facing
+        "cam4": {
+            "name": "cam4",
+            "link": "panda_link5",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+        # front facing
+        "cam5": {
+            "name": "cam5",
+            "link": "panda_link5",  # NOTE: 2 cameras on link5
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+        # right facing
+        "cam6": {
+            "name": "cam6",
+            "link": "panda_link6",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+        # front facing
+        "cam7": {
+            "name": "cam7",
+            "link": "panda_link7",
+            "translation": [0.0, 0.0, 0.0],
+            "orientation": [1.0, 0.0, 0.0, 0.0],
+            "frequency": 30,
+        },
+    }
 
-    # Set relative transform to panda_hand
-    xform = UsdGeom.Xformable(ee_cam_prim)
-    xform.ClearXformOpOrder()
-    xform.AddTranslateOp().Set(Gf.Vec3d(0.1, 0.0, 0.05))  # Slightly forward and up
-    xform.AddOrientOp().Set(
-        # Gf.Quatf(0.7071068, 0.0, -0.7071068, 0.0)
-        Gf.Quatf(0.6532815, -0.2705981, -0.6532815, 0.2705981)
-    )  # Face away from robot link_0
-
-    ee_camera = Camera(
-        prim_path=ee_camera_path,
-        name="ee_camera",
-        frequency=30,  # Higher frequency for better tracking
-        resolution=(640, 480),
-    )
+    # create body cameras
+    body_cams = []
+    for cam in cameras_config.values():
+        body_cams.append(create_camera(cam, stage))
 
     usd_help.load_stage(my_world.stage)
     usd_help.add_world_to_stage(world_cfg_table.get_mesh_world(), base_frame="/World")
@@ -281,7 +363,7 @@ if __name__ == "__main__":
     if not args.use_debug_draw:
         voxel_viewer = VoxelManager(100, size=render_voxel_size)
     cmd_step_idx = 0
-    camera_initialized = False
+    body_cams_initialized = False
 
     while simulation_app.is_running():
         my_world.step(render=True)
@@ -302,99 +384,174 @@ if __name__ == "__main__":
                 values=np.array([5000 for i in range(len(idx_list))]), joint_indices=idx_list
             )
 
-        # Initialize camera after robot is initialized
-        if step_index == 15 and not camera_initialized:
-            ee_camera.initialize()
-            ee_camera.add_distance_to_image_plane_to_frame()
-            ee_camera.add_distance_to_camera_to_frame()  # Alternative depth format
-            camera_initialized = True
-            print("Camera initialized")
+        # Initialize cameras after robot is initialized
+        if step_index == 15 and not body_cams_initialized:
+            # init body cams and depth
+            for cam in body_cams:
+                cam.initialize()
+                cam.add_distance_to_image_plane_to_frame()
+                cam.add_distance_to_camera_to_frame()
+            body_cams_initialized = True
+            print(f"{len(body_cams)} cameras initialized")
 
-        if step_index % 5 == 0.0 and step_index > 20:  # Wait for camera to be ready
-            # Get camera data
-            frame_data = ee_camera.get_current_frame()
+        if step_index % 5 == 0.0 and step_index > 20:  # Wait for cameras to be ready
+            # Clear world model once before processing all cameras
+            world_model.decay_layer("world")
 
+            # Process data from ALL cameras
+            valid_camera_count = 0
+            all_camera_frames = []  # Store for visualization if needed
 
-            print("Step Index:", step_index)
-            print("Camera Data Keys:", frame_data.keys() if frame_data is not None else None)
+            for cam_idx, cam in enumerate(body_cams):
+                frame_data = cam.get_current_frame()
 
-            if frame_data is not None and "distance_to_image_plane" in frame_data:
-                # Get depth image
-                # depth_image = frame_data["distance_to_image_plane"]
-                depth_image = frame_data["distance_to_camera"]
+                if frame_data is not None and "distance_to_image_plane" in frame_data:
+                    valid_camera_count += 1
 
-                # Clip and process depth
-                depth_clipped = clip_camera(depth_image)
-
-                if depth_clipped is not None:
-                    # Convert to tensor
-                    depth_tensor = torch.from_numpy(depth_clipped).float().to(tensor_args.device)
-
-                    # Get camera pose from its world position
-                    cam_position, cam_orientation = ee_camera.get_world_pose()
-                    camera_pose = Pose(
-                        position=tensor_args.to_device(cam_position),
-                        quaternion=tensor_args.to_device(cam_orientation),
+                    # Get depth image (using distance_to_camera for better accuracy)
+                    depth_image = frame_data.get(
+                        "distance_to_camera", frame_data.get("distance_to_image_plane")
                     )
 
-                    # Get intrinsics
-                    intrinsics = torch.tensor(ee_camera.get_intrinsics_matrix()).to(
-                        tensor_args.device
-                    )
+                    # Clip and process depth
+                    depth_clipped = clip_camera(depth_image)
 
-                    # Update world model with camera data
-                    world_model.decay_layer("world")
+                    if depth_clipped is not None:
+                        # Convert to tensor
+                        depth_tensor = (
+                            torch.from_numpy(depth_clipped).float().to(tensor_args.device)
+                        )
 
-                    data_camera = CameraObservation(
-                        depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
-                    )
+                        # Get camera pose from its world position
+                        cam_position, cam_orientation = cam.get_world_pose()
+                        camera_pose = Pose(
+                            position=tensor_args.to_device(cam_position),
+                            quaternion=tensor_args.to_device(cam_orientation),
+                        )
 
-                    world_model.add_camera_frame(data_camera, "world")
-                    world_model.process_camera_frames("world", False)
-                    torch.cuda.synchronize()
-                    world_model.update_blox_hashes()
+                        # Get intrinsics
+                        intrinsics = torch.tensor(cam.get_intrinsics_matrix()).to(
+                            tensor_args.device
+                        )
 
-                    # Get voxels for visualization
-                    bounding = Cuboid("t", dims=[1, 1, 1.0], pose=[0, 0, 0, 1, 0, 0, 0])
-                    voxels = world_model.get_voxels_in_bounding_box(bounding, voxel_size)
+                        # Create camera observation
+                        data_camera = CameraObservation(
+                            depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
+                        )
 
-                    if voxels.shape[0] > 0:
-                        voxels = voxels[voxels[:, 2] > voxel_size]
-                        voxels = voxels[voxels[:, 0] > 0.0]
-                        if args.use_debug_draw:
-                            draw_points(voxels)
-                        else:
-                            voxels = voxels.cpu().numpy()
-                            voxel_viewer.update_voxels(voxels[:, :3])
+                        # Add this camera's frame to world model
+                        world_model.add_camera_frame(data_camera, "world")
+
+                        # Store frame for visualization
+                        all_camera_frames.append(
+                            {
+                                "name": cam.name,
+                                "rgb": frame_data.get("rgb"),
+                                "depth": frame_data.get("distance_to_image_plane"),
+                                "idx": cam_idx,
+                            }
+                        )
+
+            # Process all camera frames together after adding them all
+            if valid_camera_count > 0:
+                world_model.process_camera_frames("world", False)
+                torch.cuda.synchronize()
+                world_model.update_blox_hashes()
+
+                # Get voxels for visualization
+                bounding = Cuboid("t", dims=[1, 1, 1.0], pose=[0, 0, 0, 1, 0, 0, 0])
+                voxels = world_model.get_voxels_in_bounding_box(bounding, voxel_size)
+
+                if voxels.shape[0] > 0:
+                    voxels = voxels[voxels[:, 2] > voxel_size]
+                    voxels = voxels[voxels[:, 0] > 0.0]
+                    if args.use_debug_draw:
+                        draw_points(voxels)
                     else:
-                        if not args.use_debug_draw:
-                            voxel_viewer.clear()
+                        voxels = voxels.cpu().numpy()
+                        voxel_viewer.update_voxels(voxels[:, :3])
+                else:
+                    if not args.use_debug_draw:
+                        voxel_viewer.clear()
 
-                # Display camera view if requested
-                if args.show_window and frame_data is not None:
-                    depth_display = frame_data.get("distance_to_image_plane", None)
-                    rgb_display = frame_data.get("rgb", None)
+                print(
+                    f"Processed {valid_camera_count}/{len(body_cams)} cameras at step {step_index}"
+                )
 
-                    if depth_display is not None and rgb_display is not None:
+            # Display camera views if requested
+            if args.show_window and len(all_camera_frames) > 0:
+                # Option 1: Show grid of all cameras
+                display_images = []
+
+                for frame in all_camera_frames[:4]:  # Show max 4 cameras in grid
+                    if frame["depth"] is not None and frame["rgb"] is not None:
                         # Convert depth to colormap
                         depth_colormap = cv2.applyColorMap(
-                            cv2.convertScaleAbs(depth_display, alpha=100), cv2.COLORMAP_VIRIDIS
+                            cv2.convertScaleAbs(frame["depth"], alpha=100), cv2.COLORMAP_VIRIDIS
                         )
 
                         # RGB is in RGBA format, convert to RGB
+                        rgb_display = frame["rgb"]
                         if rgb_display.shape[-1] == 4:
                             rgb_display = rgb_display[:, :, :3]
 
-                        # Stack images side by side
-                        images = np.hstack((rgb_display, depth_colormap))
+                        # Resize for grid display
+                        rgb_small = cv2.resize(rgb_display, (320, 240))
+                        depth_small = cv2.resize(depth_colormap, (320, 240))
 
-                        cv2.namedWindow("Robot Camera View", cv2.WINDOW_NORMAL)
-                        cv2.imshow("Robot Camera View", images)
-                        key = cv2.waitKey(1)
+                        # Add camera name label
+                        cv2.putText(
+                            rgb_small,
+                            frame["name"],
+                            (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 255, 0),
+                            2,
+                        )
+                        cv2.putText(
+                            depth_small,
+                            f"{frame['name']}_depth",
+                            (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 255, 0),
+                            2,
+                        )
 
-                        if key & 0xFF == ord("q") or key == 27:
-                            cv2.destroyAllWindows()
-                            break
+                        # Stack horizontally for this camera
+                        cam_pair = np.hstack((rgb_small, depth_small))
+                        display_images.append(cam_pair)
+
+                # Create grid layout
+                if len(display_images) > 0:
+                    # Stack vertically if multiple cameras
+                    if len(display_images) == 1:
+                        final_display = display_images[0]
+                    elif len(display_images) == 2:
+                        final_display = np.vstack(display_images)
+                    else:
+                        # 2x2 grid for 3-4 cameras
+                        row1 = (
+                            np.hstack(display_images[:2])
+                            if len(display_images) >= 2
+                            else display_images[0]
+                        )
+                        row2 = (
+                            np.hstack(display_images[2:4])
+                            if len(display_images) >= 3
+                            else np.zeros_like(row1)
+                        )
+                        final_display = np.vstack((row1, row2))
+
+                    cv2.namedWindow("Multi-Camera View", cv2.WINDOW_NORMAL)
+                    cv2.imshow("Multi-Camera View", final_display)
+
+                # Option 2: Cycle through cameras with keyboard
+                key = cv2.waitKey(1)
+                if key & 0xFF == ord("q") or key == 27:
+                    cv2.destroyAllWindows()
+                    break
 
         # Motion planning logic remains the same
         if cmd_plan is None and step_index % 10 == 0 and step_index > 20:
