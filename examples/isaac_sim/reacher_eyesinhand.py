@@ -121,7 +121,7 @@ def draw_points(voxels):
     draw.draw_points(point_list, colors, sizes)
 
 
-def clip_camera(depth_tensor):
+def clip_camera(depth_tensor, clipping_distance=1.0):
     """Clip camera image to bounding box for Isaac Sim camera"""
     h_ratio = 0.05
     w_ratio = 0.05
@@ -146,31 +146,32 @@ def clip_camera(depth_tensor):
     return depth_clipped
 
 
-def create_camera(camera_cfg, target_stage):
-    cam_path = f"/World/panda/{camera_cfg['link']}/{camera_cfg['name']}"
+def create_camera(camera_cfg, target_stage, optical_config: dict = {}):
+
+    cam_path = f"/World/panda/{camera_cfg['name']}_link/{camera_cfg['name']}"
     cam_prim = UsdGeom.Camera.Define(target_stage, cam_path)
-    cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, clipping_distance))
-    cam_prim.GetFocalLengthAttr().Set(_focallengthattr)
-    cam_prim.GetFocusDistanceAttr().Set(_focusdistanceattr)
+    cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(optical_config["clipping_range"]))
+    cam_prim.GetFocalLengthAttr().Set(optical_config["focal_length"])
+    cam_prim.GetFocusDistanceAttr().Set(optical_config["focus_distance"])
 
     # Set horizontal and vertical aperture for proper FOV
-    cam_prim.GetHorizontalApertureAttr().Set(_horizontalapertureattr)
-    cam_prim.GetVerticalApertureAttr().Set(_verticalapertureattr)
+    cam_prim.GetHorizontalApertureAttr().Set(optical_config["horizontal_aperture"])
+    cam_prim.GetVerticalApertureAttr().Set(optical_config["vertical_aperture"])
+
+    # adjustment being done in the URDF itself
+    _t_vec = [0.0, 0.0, 0.0]
+    _r_vec = [1.0, 0.0, 0.0, 0.0]
 
     # Set relative transform to link
     xform = UsdGeom.Xformable(cam_prim)
     xform.ClearXformOpOrder()
-    xform.AddTranslateOp().Set(
-        Gf.Vec3d(
-            camera_cfg["translation"][0], camera_cfg["translation"][1], camera_cfg["translation"][2]
-        )
-    )
+    xform.AddTranslateOp().Set(Gf.Vec3d(_t_vec[0], _t_vec[1], _t_vec[2]))
     xform.AddOrientOp().Set(
         Gf.Quatf(
-            camera_cfg["orientation"][0],
-            camera_cfg["orientation"][1],
-            camera_cfg["orientation"][2],
-            camera_cfg["orientation"][3],
+            _r_vec[0],
+            _r_vec[1],
+            _r_vec[2],
+            _r_vec[3],
         )
     )
 
@@ -178,7 +179,7 @@ def create_camera(camera_cfg, target_stage):
         prim_path=cam_path,
         name=camera_cfg["name"],
         frequency=camera_cfg["frequency"],
-        resolution=_resolution,
+        resolution=optical_config["resolution"],
     )
     return camera
 
@@ -188,9 +189,21 @@ if __name__ == "__main__":
     act_distance = 0.4
     voxel_size = 0.05
     render_voxel_size = 0.02
-    clipping_distance = 0.7
     my_world = World(stage_units_in_meters=1.0)
     stage = my_world.stage
+
+    # NOTE: currently using common configuration for all cameras
+    camera_optical_configuration = {
+        "focal_length": 1.88,
+        "focus_distance": 600.0,  # 60cm - sweet spot for accuracy
+        "horizontal_aperture": 2.58,
+        "vertical_aperture": 1.60,
+        "resolution": (640, 480),  # Balance between detail and processing speed
+        "clipping_range": (
+            0.2,
+            1.0,
+        ),  # (0.2, 2.0)  # https://realsenseai.com/stereo-depth-cameras/stereo-depth-camera-module-d421/?q=/stereo-depth-cameras/stereo-depth-camera-module-d421/&
+    }
 
     stage = my_world.stage
     my_world.scene.add_default_ground_plane()
@@ -232,6 +245,7 @@ if __name__ == "__main__":
     tensor_args = TensorDeviceType()
 
     robot_cfg = load_yaml(join_path(get_robot_configs_path(), args.robot))["robot_cfg"]
+    print("Loaded robot config from:", join_path(get_robot_configs_path(), args.robot))
 
     j_names = robot_cfg["kinematics"]["cspace"]["joint_names"]
     default_config = robot_cfg["kinematics"]["cspace"]["retract_config"]
@@ -244,72 +258,51 @@ if __name__ == "__main__":
 
     # 0 is table, 1 is wall
     world_cfg_table.cuboid[0].pose[2] -= 0.01
-    world_cfg_table.cuboid[1].pose[0] += 1.15  # bring wall infront of the robot
+    # world_cfg_table.cuboid[1].pose[0] += 1.5  # bring wall infront of the robot
+
+    # bring wall to right
+    world_cfg_table.cuboid[1].pose[1] -= 1.0
+    world_cfg_table.cuboid[1].pose[0] += 0.25
+    # 90 deg around z axis for the wall
+    world_cfg_table.cuboid[1].pose[3] = 0.707
+    world_cfg_table.cuboid[1].pose[-1] = 0.707
+
     usd_help = UsdHelper()
 
-    # common params for body cams
-    _focallengthattr = 24.0
-    _focusdistanceattr = 400.0
-    _horizontalapertureattr = 20.955
-    _verticalapertureattr = 15.2908
-    _resolution = (640, 480)
-
-    # TODO: fill values as noted in sketches
     cameras_config = {
         # front facing
         "cam1": {
             "name": "cam1",
-            "link": "panda_link2",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],  # scalar first (w, x, y, z)
             "frequency": 30,
         },
         # left facing
         "cam2": {
             "name": "cam2",
-            "link": "panda_link3",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
         # right facing
         "cam3": {
             "name": "cam3",
-            "link": "panda_link4",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
         # left facing
         "cam4": {
             "name": "cam4",
-            "link": "panda_link5",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
         # front facing
         "cam5": {
             "name": "cam5",
-            "link": "panda_link5",  # NOTE: 2 cameras on link5
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
         # right facing
         "cam6": {
             "name": "cam6",
-            "link": "panda_link6",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
         # front facing
         "cam7": {
             "name": "cam7",
-            "link": "panda_link7",
-            "translation": [0.0, 0.0, 0.0],
-            "orientation": [1.0, 0.0, 0.0, 0.0],
             "frequency": 30,
         },
     }
@@ -317,7 +310,7 @@ if __name__ == "__main__":
     # create body cameras
     body_cams = []
     for cam in cameras_config.values():
-        body_cams.append(create_camera(cam, stage))
+        body_cams.append(create_camera(cam, stage, camera_optical_configuration))
 
     usd_help.load_stage(my_world.stage)
     usd_help.add_world_to_stage(world_cfg_table.get_mesh_world(), base_frame="/World")
@@ -341,6 +334,7 @@ if __name__ == "__main__":
         fixed_iters_trajopt=True,
         finetune_trajopt_iters=300,
         minimize_jerk=True,
+        velocity_scale=0.4,  # FIXME: too low hurts performance, as mentioed in doc string
     )
     motion_gen = MotionGen(motion_gen_config)
     print("warming up..")
@@ -413,8 +407,8 @@ if __name__ == "__main__":
                         "distance_to_camera", frame_data.get("distance_to_image_plane")
                     )
 
-                    # Clip and process depth
-                    depth_clipped = clip_camera(depth_image)
+                    # Clip and process depth  # FIXME
+                    depth_clipped = clip_camera(depth_image, clipping_distance=0.5)
 
                     if depth_clipped is not None:
                         # Convert to tensor
@@ -423,7 +417,9 @@ if __name__ == "__main__":
                         )
 
                         # Get camera pose from its world position
+                        # FIXME: which one is correct?
                         cam_position, cam_orientation = cam.get_world_pose()
+                        # cam_position, cam_orientation = cam.get_local_pose()
                         camera_pose = Pose(
                             position=tensor_args.to_device(cam_position),
                             quaternion=tensor_args.to_device(cam_orientation),
@@ -454,6 +450,7 @@ if __name__ == "__main__":
 
             # Process all camera frames together after adding them all
             if valid_camera_count > 0:
+                # FIXME: figure out the correct flag
                 world_model.process_camera_frames("world", False)
                 torch.cuda.synchronize()
                 world_model.update_blox_hashes()
@@ -478,6 +475,7 @@ if __name__ == "__main__":
                     f"Processed {valid_camera_count}/{len(body_cams)} cameras at step {step_index}"
                 )
 
+            # TODO: remove this bloat, does not help much
             # Display camera views if requested
             if args.show_window and len(all_camera_frames) > 0:
                 # Option 1: Show grid of all cameras
