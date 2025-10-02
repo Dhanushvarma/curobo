@@ -1,12 +1,7 @@
 #
 # Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Debugged version with fixes and diagnostic output
 #
 
 
@@ -20,12 +15,12 @@ except ImportError:
 import torch
 
 a = torch.zeros(4, device="cuda:0")
-# Third Party
+
 import cv2
 import numpy as np
 import torch
 from matplotlib import cm
-from nvblox_torch.datasets.realsense_dataset import RealsenseDataloader
+import matplotlib.pyplot as plt
 from omni.isaac.kit import SimulationApp
 
 simulation_app = SimulationApp(
@@ -35,7 +30,7 @@ simulation_app = SimulationApp(
         "height": "1080",
     }
 )
-# CuRobo
+
 from curobo.geom.sdf.world import CollisionCheckerType
 from curobo.geom.types import Cuboid, WorldConfig
 from curobo.types.base import TensorDeviceType
@@ -68,6 +63,12 @@ parser.add_argument(
     help="When True, shows camera image in a CV window",
     default=False,
 )
+parser.add_argument(
+    "--debug",
+    action="store_true",
+    help="Enable debug output",
+    default=True,
+)
 args = parser.parse_args()
 
 
@@ -86,7 +87,8 @@ def draw_points(voxels):
     if len(voxels) == 0:
         return
 
-    jet = cm.get_cmap("plasma_r")
+    # Use same colormap as realsense version
+    jet = cm.get_cmap("plasma").reversed()
 
     cpu_pos = voxels[..., :3].view(-1, 3).cpu().numpy()
     z_val = cpu_pos[:, 1]
@@ -107,7 +109,6 @@ def draw_points(voxels):
     point_list = []
     colors = []
     for i in range(b):
-        # get list of points:
         point_list += [(cpu_pos[i, 0], cpu_pos[i, 1], cpu_pos[i, 2])]
         colors += [(jet_colors[i][0], jet_colors[i][1], jet_colors[i][2], 1.0)]
     sizes = [10.0 for _ in range(b)]
@@ -115,21 +116,27 @@ def draw_points(voxels):
     draw.draw_points(point_list, colors, sizes)
 
 
-def clip_camera(depth_tensor):
+def clip_camera(depth_tensor, clipping_range):
     if depth_tensor is None:
         return None
-    h_ratio = 0.05
-    w_ratio = 0.05
+
+    # Match realsense clipping ratios (15% instead of 5%)
+    h_ratio = 0.15
+    w_ratio = 0.15
     h, w = depth_tensor.shape
     depth_clipped = depth_tensor.copy()
+
+    # Clip edges
     depth_clipped[: int(h_ratio * h), :] = 0.0
     depth_clipped[int((1 - h_ratio) * h) :, :] = 0.0
     depth_clipped[:, : int(w_ratio * w)] = 0.0
     depth_clipped[:, int((1 - w_ratio) * w) :] = 0.0
-    depth_clipped[depth_clipped > camera_optical_configuration["clipping_range"][1]] = 0.0
 
-    return depth_tensor
-    # return depth_clipped
+    # Clip by range
+    depth_clipped[depth_clipped > clipping_range[1]] = 0.0
+    depth_clipped[depth_clipped < clipping_range[0]] = 0.0
+
+    return depth_clipped
 
 
 def draw_line(start, gradient):
@@ -152,9 +159,9 @@ def draw_line(start, gradient):
 
 
 if __name__ == "__main__":
-    radius = 0.2
+    radius = 0.075
     act_distance = 0.4
-    voxel_size = 0.025
+    voxel_size = 0.03  # Match realsense voxel size
     my_world = World(stage_units_in_meters=1.0)
     stage = my_world.stage
     my_world.scene.add_default_ground_plane()
@@ -175,61 +182,81 @@ if __name__ == "__main__":
 
     target = sphere.VisualSphere(
         "/World/target",
-        position=np.array([0.0, 0, 0.25 + z_up]),
+        position=np.array([0.0, 0.25, 0.4]),  # Match realsense target position
         orientation=np.array([1, 0, 0, 0]),
         radius=radius,
         visual_material=target_material,
     )
+    target.set_visibility(True)
 
-    # constant for camera & camera_marker pose
-    _t_vec = [0.0, -1.5, 0.25 + z_up]
-    _r_vec = [0.7071068, 0.7071068, 0.0, 0.0]  # XYZ : 90 0 0
+    # Camera, Camera Marker Poses
+    _t_vec = [0.0, -0.1, 0.25]  # Match realsense camera marker position
+    _r_vec_marker = [0.843, -0.537, 0.0, 0.0]  # XYZ : -65 0 0
+    _r_vec = [0.5372996, 0.8433914, 0, 0]  # XYZ : 115 0 0
+    # _r_vec = [0.7071068, 0.7071068, 0.0, 0.0]  # XYZ : 90 0 0
 
     # Camera marker for visualization (optional)
     camera_marker = cuboid.VisualCuboid(
         "/World/camera_marker",
         position=np.array(_t_vec),
-        orientation=np.array(_r_vec),
+        orientation=np.array(_r_vec_marker),
         color=np.array([0.1, 0.1, 0.5]),
         size=0.03,
     )
-    camera_marker.set_visibility(False)  # TODO: revent to false to hide marker
+    camera_marker.set_visibility(False)  # Make visible for debugging
 
     # Create camera using USD API
     camera_path = "/World/main_camera"
-    cam_prim = UsdGeom.Camera.Define(stage, camera_path)
-    cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(*camera_optical_configuration["clipping_range"]))
-    cam_prim.GetFocalLengthAttr().Set(camera_optical_configuration["focal_length"])
-    cam_prim.GetFocusDistanceAttr().Set(camera_optical_configuration["focus_distance"])
-    cam_prim.GetHorizontalApertureAttr().Set(camera_optical_configuration["horizontal_aperture"])
-    cam_prim.GetVerticalApertureAttr().Set(camera_optical_configuration["vertical_aperture"])
 
-    # Set camera position and orientation
-    xform_cam = UsdGeom.Xformable(cam_prim)
-    xform_cam.ClearXformOpOrder()
-    xform_cam.AddTranslateOp().Set(Gf.Vec3d(_t_vec[0], _t_vec[1], _t_vec[2]))
-    xform_cam.AddOrientOp().Set(
-        Gf.Quatf(
-            _r_vec[0],
-            _r_vec[1],
-            _r_vec[2],
-            _r_vec[3],
+    if True:
+        cam_prim = UsdGeom.Camera.Define(stage, camera_path)
+        cam_prim.GetClippingRangeAttr().Set(
+            Gf.Vec2f(*camera_optical_configuration["clipping_range"])
         )
-    )
+        cam_prim.GetFocalLengthAttr().Set(camera_optical_configuration["focal_length"])
+        cam_prim.GetFocusDistanceAttr().Set(camera_optical_configuration["focus_distance"])
+        cam_prim.GetHorizontalApertureAttr().Set(
+            camera_optical_configuration["horizontal_aperture"]
+        )
+        cam_prim.GetVerticalApertureAttr().Set(camera_optical_configuration["vertical_aperture"])
 
-    # Wrap with Isaac Sim Camera
-    _camera = Camera(
-        prim_path=camera_path,
-        name="main_camera",
-        frequency=30,
-        resolution=camera_optical_configuration["resolution"],
-    )
+        # Set camera position and orientation
+        xform_cam = UsdGeom.Xformable(cam_prim)
+        xform_cam.ClearXformOpOrder()
+        xform_cam.AddTranslateOp().Set(Gf.Vec3d(_t_vec[0], _t_vec[1], _t_vec[2]))
+        xform_cam.AddOrientOp().Set(Gf.Quatf(_r_vec[0], _r_vec[1], _r_vec[2], _r_vec[3]))
+
+        # Wrap with Isaac Sim Camera
+        _camera = Camera(
+            prim_path=camera_path,
+            name="main_camera",
+            frequency=30,
+            resolution=camera_optical_configuration["resolution"],
+        )
+
+    if False:
+        # make camera from Isaac Sim API
+        _camera = Camera(
+            prim_path=camera_path,
+            name="main_camera",
+            frequency=30,
+            position=_t_vec,
+            orientation=_r_vec,
+            resolution=camera_optical_configuration["resolution"],
+        )
+        _camera.set_focal_length(camera_optical_configuration["focal_length"])
+        _camera.set_focus_distance(camera_optical_configuration["focus_distance"])
+        _camera.set_horizontal_aperture(camera_optical_configuration["horizontal_aperture"])
+        _camera.set_vertical_aperture(camera_optical_configuration["vertical_aperture"])
+        _camera.set_clipping_range(
+            camera_optical_configuration["clipping_range"][0],
+            camera_optical_configuration["clipping_range"][1],
+        )
 
     # Load obstacles
     world_cfg_table = WorldConfig.from_dict(
         load_yaml(join_path(get_world_configs_path(), "camera_wall.yml"))
     )
-    world_cfg_table.cuboid[0].pose[2] += z_up
 
     # Add obstacles to scene
     usd_help = UsdHelper()
@@ -243,7 +270,7 @@ if __name__ == "__main__":
             "blox": {
                 "world": {
                     "pose": [0, 0, 0, 1, 0, 0, 0],
-                    "integrator_type": "occupancy",
+                    "integrator_type": "tsdf",
                     "voxel_size": 0.03,
                 }
             }
@@ -267,6 +294,7 @@ if __name__ == "__main__":
     x_sph = torch.zeros((1, 1, 1, 4), device=tensor_args.device, dtype=tensor_args.dtype)
     x_sph[..., 3] = radius
     camera_initialized = False
+    frame_count = 0
 
     while simulation_app.is_running():
         my_world.step(render=True)
@@ -301,22 +329,52 @@ if __name__ == "__main__":
             frame_data = _camera.get_current_frame()
 
             if frame_data is not None and "distance_to_image_plane" in frame_data:
+                frame_count += 1
+
                 # Get depth image
                 depth_image = frame_data["distance_to_image_plane"]
-                depth_clipped = clip_camera(depth_image)
+                depth_image[np.isinf(depth_image)] = 0  # making inf values zero
+                depth_image[np.isnan(depth_image)] = 0  # handle NaN values
+
+                # Debug: Check depth statistics before clipping
+                if args.debug and frame_count % 30 == 0:
+                    valid_depth = depth_image[depth_image > 0]
+                    if len(valid_depth) > 0:
+                        print(f"\n--- Frame {frame_count} Debug Info ---")
+                        print(f"Depth range: {valid_depth.min():.3f} - {valid_depth.max():.3f}")
+                        print(f"Valid depth pixels: {len(valid_depth)} / {depth_image.size}")
+
+                depth_clipped = clip_camera(
+                    depth_image, camera_optical_configuration["clipping_range"]
+                )
 
                 if depth_clipped is not None:
                     # Convert to tensor
                     depth_tensor = torch.from_numpy(depth_clipped).float().to(tensor_args.device)
+
+                    # Debug: Check depth tensor
+                    if args.debug and frame_count % 30 == 0:
+                        valid_tensor = depth_tensor[depth_tensor > 0]
+                        print(f"Depth tensor valid pixels: {valid_tensor.numel()}")
+                        if valid_tensor.numel() > 0:
+                            print(
+                                f"Depth tensor range: {valid_tensor.min():.3f} - {valid_tensor.max():.3f}"
+                            )
 
                     # Get camera intrinsics
                     intrinsics = torch.tensor(_camera.get_intrinsics_matrix()).to(
                         tensor_args.device
                     )
 
-                    # Get camera pose, TODO: figure out which one is correct
-                    cam_position, cam_orientation = _camera.get_world_pose()
+                    # Get camera pose from the camera itself
+                    # NOTE: cam marker and marker are off in orientation by 180 in X-axis
                     # cam_position, cam_orientation = _camera.get_local_pose()
+                    cam_position, cam_orientation = camera_marker.get_local_pose()
+
+                    # Debug: Print camera pose
+                    if args.debug and frame_count % 30 == 0:
+                        print(f"Camera position: {cam_position}")
+                        print(f"Camera orientation: {cam_orientation}")
 
                     camera_pose = Pose(
                         position=tensor_args.to_device(cam_position),
@@ -327,8 +385,9 @@ if __name__ == "__main__":
                     data_camera = CameraObservation(
                         depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
                     )
+                    data_camera.to(device=model.tensor_args.device)
 
-                    # Add to world model, TODO: make sure it has to be world frame!
+                    # Add to world model
                     model.world_model.add_camera_frame(data_camera, "world")
                     model.world_model.process_camera_frames("world", False)
                     torch.cuda.synchronize()
@@ -339,8 +398,25 @@ if __name__ == "__main__":
                     voxels = model.world_model.get_voxels_in_bounding_box(bounding, voxel_size)
 
                     if voxels is not None:
-                        print("Number of voxels: ", voxels.shape[0])
-                    draw_points(voxels)
+                        num_voxels = voxels.shape[0] if len(voxels.shape) > 0 else 0
+                        if args.debug and frame_count % 30 == 0:
+                            print(f"Number of voxels: {num_voxels}")
+                            if num_voxels > 0:
+                                voxel_pos = voxels[..., :3].view(-1, 3)
+                                print(f"Voxel position range:")
+                                print(
+                                    f"  X: {voxel_pos[:, 0].min():.3f} - {voxel_pos[:, 0].max():.3f}"
+                                )
+                                print(
+                                    f"  Y: {voxel_pos[:, 1].min():.3f} - {voxel_pos[:, 1].max():.3f}"
+                                )
+                                print(
+                                    f"  Z: {voxel_pos[:, 2].min():.3f} - {voxel_pos[:, 2].max():.3f}"
+                                )
+                        draw_points(voxels)
+                    else:
+                        if args.debug and frame_count % 30 == 0:
+                            print("No voxels generated!")
 
                     # Check collision
                     d, d_vec = model.get_collision_vector(x_sph)
@@ -355,7 +431,8 @@ if __name__ == "__main__":
                         target_material.set_color(np.array([p, 0, 0]))
 
                     if d.item() != 0.0:
-                        print(f"Distance: {d.item():.4f}")
+                        if args.debug and frame_count % 30 == 0:
+                            print(f"Collision distance: {d.item():.4f}")
                         draw_line(sph_position, d_vec[..., :3].view(3).cpu().numpy())
                     else:
                         # Clear lines when no collision
@@ -372,8 +449,13 @@ if __name__ == "__main__":
                     rgb_display = frame_data.get("rgb")
 
                     if depth_display is not None:
+                        # Normalize depth for visualization
+                        depth_normalized = depth_display.copy()
+                        depth_normalized[
+                            depth_normalized > camera_optical_configuration["clipping_range"][1]
+                        ] = 0
                         depth_colormap = cv2.applyColorMap(
-                            cv2.convertScaleAbs(depth_display, alpha=100), cv2.COLORMAP_VIRIDIS
+                            cv2.convertScaleAbs(depth_normalized, alpha=255), cv2.COLORMAP_VIRIDIS
                         )
 
                         # Show images
