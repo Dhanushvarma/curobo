@@ -77,7 +77,9 @@ parser.add_argument(
     default=False,
 )
 
-parser.add_argument("--robot", type=str, default="franka.yml", help="robot configuration to load")
+parser.add_argument(
+    "--robot", type=str, default="franka_bodycams.yml", help="robot configuration to load"
+)
 parser.add_argument(
     "--use-debug-draw",
     action="store_true",
@@ -146,42 +148,48 @@ def clip_camera(depth_tensor, clipping_distance=1.0):
     return depth_clipped
 
 
-def create_camera(camera_cfg, target_stage, optical_config: dict = {}):
+def create_camera(camera_name: str, optical_config: dict = {}):
 
-    cam_path = f"/World/panda/{camera_cfg['name']}_link/{camera_cfg['name']}"
-    cam_prim = UsdGeom.Camera.Define(target_stage, cam_path)
-    cam_prim.GetClippingRangeAttr().Set(Gf.Vec2f(optical_config["clipping_range"]))
-    cam_prim.GetFocalLengthAttr().Set(optical_config["focal_length"])
-    cam_prim.GetFocusDistanceAttr().Set(optical_config["focus_distance"])
+    _camera_prim_path = f"/World/panda/{camera_name}_link/{camera_name}"
 
-    # Set horizontal and vertical aperture for proper FOV
-    cam_prim.GetHorizontalApertureAttr().Set(optical_config["horizontal_aperture"])
-    cam_prim.GetVerticalApertureAttr().Set(optical_config["vertical_aperture"])
-
-    # adjustment being done in the URDF itself
-    _t_vec = [0.0, 0.0, 0.0]
-    _r_vec = [1.0, 0.0, 0.0, 0.0]
-
-    # Set relative transform to link
-    xform = UsdGeom.Xformable(cam_prim)
-    xform.ClearXformOpOrder()
-    xform.AddTranslateOp().Set(Gf.Vec3d(_t_vec[0], _t_vec[1], _t_vec[2]))
-    xform.AddOrientOp().Set(
-        Gf.Quatf(
-            _r_vec[0],
-            _r_vec[1],
-            _r_vec[2],
-            _r_vec[3],
-        )
-    )
-
-    camera = Camera(
-        prim_path=cam_path,
-        name=camera_cfg["name"],
-        frequency=camera_cfg["frequency"],
+    # NOTE: position and orientation are 0 since we compensate in URDF
+    _camera = Camera(
+        prim_path=_camera_prim_path,
+        name=camera_name,
+        frequency=60,
         resolution=optical_config["resolution"],
     )
-    return camera
+
+    # observed offset for IsaacSim API
+    cam_offset = Pose(
+        position=torch.tensor([[0.0, 0.0, 0.0]]),
+        quaternion=torch.tensor([[0.5, 0.5, -0.5, -0.5]]),
+    )  # quat -> (90 -90 0) XYZ Euler
+
+    # (IsaacSim API sensor pose) * (cam_offset) = (camera_desired_pose)
+    _desired_t_vec = torch.from_numpy(_camera.get_local_pose()[0]).unsqueeze(0).to(torch.float32)
+    _desired_r_vec = torch.from_numpy(_camera.get_local_pose()[1]).unsqueeze(0).to(torch.float32)
+    camera_desired_pose = Pose(position=_desired_t_vec, quaternion=_desired_r_vec)
+
+    # (IsaacSim API sensor pose) * (cam_offset) = (camera_desired_pose)
+    isaac_api_camera_pose: Pose = camera_desired_pose.multiply(cam_offset.inverse())
+
+    # set as local pose
+    _camera.set_local_pose(
+        translation=isaac_api_camera_pose.position[0].numpy().tolist(),
+        orientation=isaac_api_camera_pose.quaternion[0].numpy().tolist(),
+    )
+
+    _camera.initialize()
+    _camera.set_focal_length(optical_config["focal_length"])
+    _camera.set_focus_distance(optical_config["focus_distance"])
+    _camera.set_horizontal_aperture(optical_config["horizontal_aperture"])
+    _camera.set_vertical_aperture(optical_config["vertical_aperture"])
+    _camera.set_clipping_range(
+        optical_config["clipping_range"][0],
+        optical_config["clipping_range"][1],
+    )
+    return _camera
 
 
 if __name__ == "__main__":
@@ -195,14 +203,11 @@ if __name__ == "__main__":
     # NOTE: currently using common configuration for all cameras
     camera_optical_configuration = {
         "focal_length": 1.88,
-        "focus_distance": 600.0,  # 60cm - sweet spot for accuracy
+        "focus_distance": 600.0,
         "horizontal_aperture": 2.58,
         "vertical_aperture": 1.60,
-        "resolution": (640, 480),  # Balance between detail and processing speed
-        "clipping_range": (
-            0.2,
-            1.0,
-        ),  # (0.2, 2.0)  # https://realsenseai.com/stereo-depth-cameras/stereo-depth-camera-module-d421/?q=/stereo-depth-cameras/stereo-depth-camera-module-d421/&
+        "resolution": (640, 480),
+        "clipping_range": (0.1, 1.0),
     }
 
     stage = my_world.stage
@@ -236,7 +241,7 @@ if __name__ == "__main__":
             "blox": {
                 "world": {
                     "pose": [0, 0, 0, 1, 0, 0, 0],
-                    "integrator_type": "occupancy",
+                    "integrator_type": "tsdf",
                     "voxel_size": 0.02,
                 }
             }
@@ -269,48 +274,21 @@ if __name__ == "__main__":
 
     usd_help = UsdHelper()
 
-    cameras_config = {
-        # front facing
-        "cam1": {
-            "name": "cam1",
-            "frequency": 30,
-        },
-        # left facing
-        "cam2": {
-            "name": "cam2",
-            "frequency": 30,
-        },
-        # right facing
-        "cam3": {
-            "name": "cam3",
-            "frequency": 30,
-        },
-        # left facing
-        "cam4": {
-            "name": "cam4",
-            "frequency": 30,
-        },
-        # front facing
-        "cam5": {
-            "name": "cam5",
-            "frequency": 30,
-        },
-        # right facing
-        "cam6": {
-            "name": "cam6",
-            "frequency": 30,
-        },
-        # front facing
-        "cam7": {
-            "name": "cam7",
-            "frequency": 30,
-        },
-    }
+    # front, left, right, left, front, right, front
+    # camera_name_list = [f"cam{i}" for i in range(3, 8)]
+    camera_name_list = ['cam2', 'cam3', 'cam4', 'cam6']
 
     # create body cameras
     body_cams = []
-    for cam in cameras_config.values():
-        body_cams.append(create_camera(cam, stage, camera_optical_configuration))
+    for name in camera_name_list:
+        print(f"Creating camera: {name}")
+        body_cams.append(create_camera(name, camera_optical_configuration))
+
+    # NVBlox pose = isaac_api_camera_pose * cam_nvblox_offset
+    cam_nvblox_offset = Pose(
+        position=tensor_args.to_device(torch.tensor([[0.0, 0.0, 0.0]])),
+        quaternion=tensor_args.to_device(torch.tensor([[+0.5, -0.5, +0.5, -0.5]])),
+    )  # quat -> (-90 90 0) XYZ Euler
 
     usd_help.load_stage(my_world.stage)
     usd_help.add_world_to_stage(world_cfg_table.get_mesh_world(), base_frame="/World")
@@ -425,6 +403,9 @@ if __name__ == "__main__":
                             quaternion=tensor_args.to_device(cam_orientation),
                         )
 
+                        # camera pose for NVBlox = camera_pose * cam_nvblox_offset
+                        camera_pose_nvblox: Pose = camera_pose.multiply(cam_nvblox_offset)
+
                         # Get intrinsics
                         intrinsics = torch.tensor(cam.get_intrinsics_matrix()).to(
                             tensor_args.device
@@ -432,7 +413,7 @@ if __name__ == "__main__":
 
                         # Create camera observation
                         data_camera = CameraObservation(
-                            depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
+                            depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose_nvblox
                         )
 
                         # Add this camera's frame to world model
