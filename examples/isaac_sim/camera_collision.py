@@ -166,6 +166,7 @@ if __name__ == "__main__":
     stage = my_world.stage
     my_world.scene.add_default_ground_plane()
     z_up = 1.0
+    tensor_args = TensorDeviceType()
 
     camera_optical_configuration = {
         "focal_length": 1.88,
@@ -189,69 +190,55 @@ if __name__ == "__main__":
     )
     target.set_visibility(True)
 
-    # Camera, Camera Marker Poses
-    _t_vec = [0.0, -0.1, 0.25]  # Match realsense camera marker position
-    _r_vec_marker = [0.843, -0.537, 0.0, 0.0]  # XYZ : -65 0 0
-    _r_vec = [0.5372996, 0.8433914, 0, 0]  # XYZ : 115 0 0
-    # _r_vec = [0.7071068, 0.7071068, 0.0, 0.0]  # XYZ : 90 0 0
+    # Desired camera pose in world frame
+    camera_desired_t_vec = torch.tensor([[0.0, -0.15, 0.4]])
+    camera_desired_r_vec = torch.tensor([[0.7071068, 0.7071068, 0.0, 0.0]])
+    camera_desired_pose = Pose(position=camera_desired_t_vec, quaternion=camera_desired_r_vec)
 
-    # Camera marker for visualization (optional)
-    camera_marker = cuboid.VisualCuboid(
-        "/World/camera_marker",
-        position=np.array(_t_vec),
-        orientation=np.array(_r_vec_marker),
-        color=np.array([0.1, 0.1, 0.5]),
-        size=0.03,
+    # observed offset for IsaacSim API
+    cam_offset = Pose(
+        position=torch.tensor([[0.0, 0.0, 0.0]]),
+        quaternion=torch.tensor([[0.5, 0.5, -0.5, -0.5]]),
+    )  # quat -> (90 -90 0) XYZ Euler
+
+    # (IsaacSim API sensor pose) * (cam_offset) = (camera_desired_pose)
+    isaac_api_camera_pose: Pose = camera_desired_pose.multiply(cam_offset.inverse())
+
+    # NVBlox pose = isaac_api_camera_pose * cam_nvblox_offset
+    cam_nvblox_offset = Pose(
+        position=tensor_args.to_device(torch.tensor([[0.0, 0.0, 0.0]])),
+        quaternion=tensor_args.to_device(torch.tensor([[+0.5, -0.5, +0.5, -0.5]])),
+    )  # quat -> (-90 90 0) XYZ Euler
+
+    # make camera from Isaac Sim API
+    _camera = Camera(
+        prim_path="/World/main_camera",
+        name="main_camera",
+        frequency=30,
+        position=isaac_api_camera_pose.position.tolist()[0],
+        orientation=isaac_api_camera_pose.quaternion.tolist()[0],
+        resolution=camera_optical_configuration["resolution"],
     )
-    camera_marker.set_visibility(False)  # Make visible for debugging
-
-    # Create camera using USD API
-    camera_path = "/World/main_camera"
-
-    if True:
-        cam_prim = UsdGeom.Camera.Define(stage, camera_path)
-        cam_prim.GetClippingRangeAttr().Set(
-            Gf.Vec2f(*camera_optical_configuration["clipping_range"])
-        )
-        cam_prim.GetFocalLengthAttr().Set(camera_optical_configuration["focal_length"])
-        cam_prim.GetFocusDistanceAttr().Set(camera_optical_configuration["focus_distance"])
-        cam_prim.GetHorizontalApertureAttr().Set(
-            camera_optical_configuration["horizontal_aperture"]
-        )
-        cam_prim.GetVerticalApertureAttr().Set(camera_optical_configuration["vertical_aperture"])
-
-        # Set camera position and orientation
-        xform_cam = UsdGeom.Xformable(cam_prim)
-        xform_cam.ClearXformOpOrder()
-        xform_cam.AddTranslateOp().Set(Gf.Vec3d(_t_vec[0], _t_vec[1], _t_vec[2]))
-        xform_cam.AddOrientOp().Set(Gf.Quatf(_r_vec[0], _r_vec[1], _r_vec[2], _r_vec[3]))
-
-        # Wrap with Isaac Sim Camera
-        _camera = Camera(
-            prim_path=camera_path,
-            name="main_camera",
-            frequency=30,
-            resolution=camera_optical_configuration["resolution"],
-        )
+    _camera.initialize()  # need to initialize before setting parameters
+    _camera.set_focal_length(camera_optical_configuration["focal_length"])
+    _camera.set_focus_distance(camera_optical_configuration["focus_distance"])
+    _camera.set_horizontal_aperture(camera_optical_configuration["horizontal_aperture"])
+    _camera.set_vertical_aperture(camera_optical_configuration["vertical_aperture"])
+    _camera.set_clipping_range(
+        camera_optical_configuration["clipping_range"][0],
+        camera_optical_configuration["clipping_range"][1],
+    )
 
     if False:
-        # make camera from Isaac Sim API
-        _camera = Camera(
-            prim_path=camera_path,
-            name="main_camera",
-            frequency=30,
-            position=_t_vec,
-            orientation=_r_vec,
-            resolution=camera_optical_configuration["resolution"],
+        # Camera marker for visualization (optional)
+        camera_marker = cuboid.VisualCuboid(
+            "/World/camera_marker",
+            position=np.array(_t_vec),
+            orientation=np.array(_r_vec_marker),
+            color=np.array([0.1, 0.1, 0.5]),
+            size=0.03,
         )
-        _camera.set_focal_length(camera_optical_configuration["focal_length"])
-        _camera.set_focus_distance(camera_optical_configuration["focus_distance"])
-        _camera.set_horizontal_aperture(camera_optical_configuration["horizontal_aperture"])
-        _camera.set_vertical_aperture(camera_optical_configuration["vertical_aperture"])
-        _camera.set_clipping_range(
-            camera_optical_configuration["clipping_range"][0],
-            camera_optical_configuration["clipping_range"][1],
-        )
+        camera_marker.set_visibility(False)  # Make visible for debugging
 
     # Load obstacles
     world_cfg_table = WorldConfig.from_dict(
@@ -290,7 +277,6 @@ if __name__ == "__main__":
     model = RobotWorld(config)
 
     i = 0
-    tensor_args = TensorDeviceType()
     x_sph = torch.zeros((1, 1, 1, 4), device=tensor_args.device, dtype=tensor_args.dtype)
     x_sph[..., 3] = radius
     camera_initialized = False
@@ -366,24 +352,31 @@ if __name__ == "__main__":
                         tensor_args.device
                     )
 
-                    # Get camera pose from the camera itself
-                    # NOTE: cam marker and marker are off in orientation by 180 in X-axis
-                    # cam_position, cam_orientation = _camera.get_local_pose()
-                    cam_position, cam_orientation = camera_marker.get_local_pose()
+                    # IsaacSim Sensors API camera pose
+                    cam_position, cam_orientation = _camera.get_local_pose()
+
+                    # convert to cuRobo Pose
+                    camera_pose = Pose(
+                        position=tensor_args.to_device(torch.from_numpy(cam_position).unsqueeze(0)),
+                        quaternion=tensor_args.to_device(
+                            torch.from_numpy(cam_orientation).unsqueeze(0)
+                        ),
+                    )
+
+                    # camera pose for NVBlox = camera_pose * cam_nvblox_offset
+                    camera_pose_nvblox: Pose = camera_pose.multiply(cam_nvblox_offset)
 
                     # Debug: Print camera pose
                     if args.debug and frame_count % 30 == 0:
+                        print(50 * "-")
                         print(f"Camera position: {cam_position}")
                         print(f"Camera orientation: {cam_orientation}")
-
-                    camera_pose = Pose(
-                        position=tensor_args.to_device(cam_position),
-                        quaternion=tensor_args.to_device(cam_orientation),
-                    )
+                        print(f"NvBlox Camera position: {camera_pose_nvblox.position}")
+                        print(f"NvBlox Camera orientation: {camera_pose_nvblox.quaternion}")
 
                     # Create camera observation
                     data_camera = CameraObservation(
-                        depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose
+                        depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose_nvblox
                     )
                     data_camera.to(device=model.tensor_args.device)
 
