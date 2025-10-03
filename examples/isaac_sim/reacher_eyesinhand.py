@@ -78,7 +78,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--robot", type=str, default="franka_bodycams.yml", help="robot configuration to load"
+    "--robot", type=str, default="ur5e_bodycams.yml", help="robot configuration to load"
 )
 parser.add_argument(
     "--use-debug-draw",
@@ -150,7 +150,8 @@ def clip_camera(depth_tensor, clipping_distance=1.0):
 
 def create_camera(camera_name: str, optical_config: dict = {}):
 
-    _camera_prim_path = f"/World/panda/{camera_name}_link/{camera_name}"
+    # _camera_prim_path = f"/World/panda/{camera_name}_link/{camera_name}"  # for Franka Panda
+    _camera_prim_path = f"/World/ur5e_robot/{camera_name}_link/{camera_name}"  # for UR5e
 
     # NOTE: position and orientation are 0 since we compensate in URDF
     _camera = Camera(
@@ -257,26 +258,21 @@ if __name__ == "__main__":
 
     robot, _ = add_robot_to_scene(robot_cfg, my_world, "/World/world_robot/")
 
-    world_cfg_table = WorldConfig.from_dict(
-        load_yaml(join_path(get_world_configs_path(), "collision_wall.yml"))
+    world_cfg_obstacles = WorldConfig.from_dict(
+        load_yaml(join_path(get_world_configs_path(), "collision_cubes.yml"))
     )
 
-    # 0 is table, 1 is wall
-    world_cfg_table.cuboid[0].pose[2] -= 0.01
-    # world_cfg_table.cuboid[1].pose[0] += 1.5  # bring wall infront of the robot
-
-    # bring wall to right
-    world_cfg_table.cuboid[1].pose[1] -= 1.0
-    world_cfg_table.cuboid[1].pose[0] += 0.25
-    # 90 deg around z axis for the wall
-    world_cfg_table.cuboid[1].pose[3] = 0.707
-    world_cfg_table.cuboid[1].pose[-1] = 0.707
+    world_cfg.add_obstacle(world_cfg_obstacles.cuboid[-2])  # add table to collision checker
+    world_cfg.add_obstacle(world_cfg_obstacles.cuboid[-1])  # add wall to collision checker
 
     usd_help = UsdHelper()
 
-    # front, left, right, left, front, right, front
+    # Franka Panda
+    # 1: front, 2: left, 3: right, 4: left, 5: front, 6: right, 7: front
     # camera_name_list = [f"cam{i}" for i in range(3, 8)]
-    camera_name_list = ['cam2', 'cam3', 'cam4', 'cam6']
+
+    # UR5e
+    camera_name_list = ["cam1", "cam2", "cam3", "cam4", "cam5", "cam6"]
 
     # create body cameras
     body_cams = []
@@ -291,8 +287,8 @@ if __name__ == "__main__":
     )  # quat -> (-90 90 0) XYZ Euler
 
     usd_help.load_stage(my_world.stage)
-    usd_help.add_world_to_stage(world_cfg_table.get_mesh_world(), base_frame="/World")
-    world_cfg.add_obstacle(world_cfg_table.cuboid[0])
+    usd_help.add_world_to_stage(world_cfg_obstacles.get_mesh_world(), base_frame="/World")
+    world_cfg.add_obstacle(world_cfg_obstacles.cuboid[0])
     # world_cfg.add_obstacle(world_cfg_table.cuboid[1])  # commented out to remove wall from collision check, since we want it to be detected from camera
     motion_gen_config = MotionGenConfig.load_from_robot_config(
         robot_cfg,
