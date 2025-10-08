@@ -410,4 +410,20 @@
     <child link="cam6_link"/>
   </joint>
 
+  <link name="cam7_link"/>
+  <joint name="cam7_joint" type="fixed">
+    <!-- default toolframe: X+ left, Y+ up, Z+ front -->
+    <origin rpy="1.5707963267948966 0 3.141592653589793" xyz="-0.2040509 -0.038 0.005"/>
+    <parent link="forearm_link"/>
+    <child link="cam7_link"/>
+  </joint>
+
+  <link name="cam8_link"/>
+  <joint name="cam8_joint" type="fixed">
+    <!-- default toolframe: X+ left, Y+ up, Z+ front -->
+    <origin rpy="1.5707963267948966 0 0" xyz="-0.2040509 +0.038 0.005"/>
+    <parent link="forearm_link"/>
+    <child link="cam8_link"/>
+  </joint>
+
 </robot>
