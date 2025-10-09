@@ -18,6 +18,7 @@ except ImportError:
 
 # Third Party
 import cv2
+from PIL import Image
 import torch
 
 a = torch.zeros(4, device="cuda:0")
@@ -48,6 +49,8 @@ from curobo.types.state import JointState
 from curobo.util_file import get_robot_configs_path, get_world_configs_path, join_path, load_yaml
 from curobo.wrap.model.robot_world import RobotWorld, RobotWorldConfig
 from curobo.wrap.reacher.motion_gen import MotionGen, MotionGenConfig, MotionGenPlanConfig
+from curobo.wrap.model.robot_segmenter import RobotSegmenter
+
 
 simulation_app.update()
 # Standard Library
@@ -286,10 +289,18 @@ if __name__ == "__main__":
         quaternion=tensor_args.to_device(torch.tensor([[+0.5, -0.5, +0.5, -0.5]])),
     )  # quat -> (-90 90 0) XYZ Euler
 
+    # Segmentation Setup
+    curobo_segmenter = RobotSegmenter.from_robot_file(
+        robot_file=args.robot,
+        collision_sphere_buffer=0.00,
+        distance_threshold=0.000,
+        use_cuda_graph=True,
+        ops_dtype=torch.float32,
+        depth_to_meter=1,
+    )
+
     usd_help.load_stage(my_world.stage)
     usd_help.add_world_to_stage(world_cfg_obstacles.get_mesh_world(), base_frame="/World")
-    world_cfg.add_obstacle(world_cfg_obstacles.cuboid[0])
-    # world_cfg.add_obstacle(world_cfg_table.cuboid[1])  # commented out to remove wall from collision check, since we want it to be detected from camera
     motion_gen_config = MotionGenConfig.load_from_robot_config(
         robot_cfg,
         world_cfg,
@@ -308,7 +319,6 @@ if __name__ == "__main__":
         fixed_iters_trajopt=True,
         finetune_trajopt_iters=300,
         minimize_jerk=True,
-        velocity_scale=0.4,  # FIXME: too low hurts performance, as mentioed in doc string
     )
     motion_gen = MotionGen(motion_gen_config)
     print("warming up..")
@@ -370,19 +380,32 @@ if __name__ == "__main__":
             valid_camera_count = 0
             all_camera_frames = []  # Store for visualization if needed
 
+            # get robot joint state, same for all the cameras since same timestep
+            _sim_js = robot.get_joints_state()
+            _sim_js_names = robot.dof_names
+            _cu_js = JointState(
+                position=tensor_args.to_device(_sim_js.positions),
+                velocity=tensor_args.to_device(_sim_js.velocities) * 0.0,
+                acceleration=tensor_args.to_device(_sim_js.velocities) * 0.0,
+                jerk=tensor_args.to_device(_sim_js.velocities) * 0.0,
+                joint_names=_sim_js_names,
+            )
+            _cu_js = _cu_js.get_ordered_joint_state(motion_gen.kinematics.joint_names)
+
             for cam_idx, cam in enumerate(body_cams):
                 frame_data = cam.get_current_frame()
 
                 if frame_data is not None and "distance_to_image_plane" in frame_data:
                     valid_camera_count += 1
 
-                    # Get depth image (using distance_to_camera for better accuracy)
-                    depth_image = frame_data.get(
-                        "distance_to_camera", frame_data.get("distance_to_image_plane")
-                    )
+                    # Get depth image
+                    depth_image = frame_data.get("distance_to_image_plane")
 
                     # Clip and process depth  # FIXME
-                    depth_clipped = clip_camera(depth_image, clipping_distance=0.5)
+                    depth_clipped = clip_camera(
+                        depth_image,
+                        clipping_distance=camera_optical_configuration["clipping_range"][-1],
+                    )
 
                     if depth_clipped is not None:
                         # Convert to tensor
@@ -408,12 +431,47 @@ if __name__ == "__main__":
                         )
 
                         # Create camera observation
-                        data_camera = CameraObservation(
+                        data_camera_nvblox = CameraObservation(
                             depth_image=depth_tensor, intrinsics=intrinsics, pose=camera_pose_nvblox
                         )
+                        data_camera_roboseg = CameraObservation(
+                            depth_image=depth_tensor.unsqueeze(0), intrinsics=intrinsics, pose=camera_pose_nvblox
+                        )  # needs batch dim
+
+                        # prepare
+                        if not curobo_segmenter.ready:
+                            curobo_segmenter.update_camera_projection(data_camera_roboseg)
+
+                        # reports True on the robot, False elsewhere.
+                        depth_mask, _ = curobo_segmenter.get_robot_mask_from_active_js(
+                            data_camera_roboseg, _cu_js
+                        )
+
+                        # FIXME
+                        # use the depth mask and set robot depth measurement to zero
+                        data_camera_nvblox.depth_image[depth_mask.squeeze(0)] = 0.0
+
+                        # debug
+                        if False:
+                            # Save depth mask (convert from torch tensor, squeeze batch dim)
+                            mask_np = depth_mask.squeeze(0).cpu().numpy()  # (480, 640)
+                            mask_img = Image.fromarray((mask_np * 255).astype(np.uint8))
+                            mask_img.save(f"depth_mask_{cam_idx}.png")
+
+                            # Save RGBA
+                            rgba_img = Image.fromarray(frame_data["rgba"].astype(np.uint8))
+                            rgba_img.save(f"rgba_{cam_idx}.png")
+
+                            # Save distance to image plane (normalize to 0-255 for visualization)
+                            dist = frame_data["distance_to_image_plane"]
+                            dist_normalized = (
+                                (dist - dist.min()) / (dist.max() - dist.min()) * 255
+                            ).astype(np.uint8)
+                            dist_img = Image.fromarray(dist_normalized)
+                            dist_img.save(f"distance_to_image_plane_{cam_idx}.png")
 
                         # Add this camera's frame to world model
-                        world_model.add_camera_frame(data_camera, "world")
+                        world_model.add_camera_frame(data_camera_nvblox, "world")
 
                         # Store frame for visualization
                         all_camera_frames.append(
