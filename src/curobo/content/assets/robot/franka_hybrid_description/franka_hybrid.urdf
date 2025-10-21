@@ -1,0 +1,1087 @@
+<?xml version="1.0" ?>
+<robot name="panda" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <link name="base_link"/>
+  <joint name="panda_fixed" type="fixed">
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+    <parent link="base_link"/>
+    <child link="panda_link0"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+
+  <link name="panda_link0">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link0.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link0.stl"/>
+      </geometry>
+    </collision>
+
+
+  </link>
+  <link name="panda_link1">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link1.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00033 -0.02204 -0.04762"/>
+      <mass value="2.797"/>
+      <inertia ixx="0.0156" ixy="0.0" ixz="0.0" iyy="0.01439" iyz="-0.0024" izz="0.005"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint1" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    <origin rpy="0 0 0" xyz="0 0 0.333"/>
+    <parent link="panda_link0"/>
+    <child link="panda_link1"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="87" lower="-2.8973" upper="2.8973" velocity="2.1750"/>
+  </joint>
+  <link name="panda_link2">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link2.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link2.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00038 -0.09211 0.01908"/>
+      <mass value="2.542"/>
+      <inertia ixx="0.0166" ixy="0.0" ixz="0.0" iyy="0.0046" iyz="0.0035" izz="0.015"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint2" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-1.7628" soft_upper_limit="1.7628"/>
+    <origin rpy="-1.57079632679 0 0" xyz="0 0 0"/>
+    <parent link="panda_link1"/>
+    <child link="panda_link2"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="87" lower="-1.7628" upper="1.7628" velocity="2.1750"/>
+  </joint>
+  <link name="panda_link3">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link3.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link3.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.05152 0.01696 -0.02971"/>
+      <mass value="2.2513"/>
+      <inertia ixx="0.006" ixy="0.009" ixz="0.003" iyy="0.0086" iyz="0.009" izz="0.0065"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint3" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    <origin rpy="1.57079632679 0 0" xyz="0 -0.316 0"/>
+    <parent link="panda_link2"/>
+    <child link="panda_link3"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="87" lower="-2.8973" upper="2.8973" velocity="2.1750"/>
+  </joint>
+  <link name="panda_link4">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link4.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link4.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.05113 0.05825 0.01698"/>
+      <mass value="2.2037"/>
+      <inertia ixx="0.0156" ixy="0.0" ixz="0.0" iyy="0.01439" iyz="-0.0024" izz="0.005"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint4" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0718" soft_upper_limit="-0.0698"/>
+    <origin rpy="1.57079632679 0 0" xyz="0.0825 0 0"/>
+    <parent link="panda_link3"/>
+    <child link="panda_link4"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="87" lower="-3.0718" upper="-0.0698" velocity="2.1750"/>
+    <!-- something is weird with this joint limit config
+    <dynamics damping="10.0"/>
+    <limit effort="87" lower="-3.0" upper="0.087" velocity="2.1750"/>  -->
+  </joint>
+  <link name="panda_link5">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link5.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link5.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.00005 0.03730 -0.09280"/>
+      <mass value="2.2855"/>
+      <inertia ixx="0.02297014781" ixy="0.0" ixz="0.0" iyy="0.02095060919" iyz="0.00382345782" izz="0.00430606551"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint5" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    <origin rpy="-1.57079632679 0 0" xyz="-0.0825 0.384 0"/>
+    <parent link="panda_link4"/>
+    <child link="panda_link5"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="12" lower="-2.8973" upper="2.8973" velocity="2.6100"/>
+  </joint>
+  <link name="panda_link6">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link6.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link6.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.06572 -0.00371 0.00153"/>
+      <mass value="1.353"/>
+      <inertia ixx="0.00087964522" ixy="-0.00021487814" ixz="-0.00011911662" iyy="0.00277796968" iyz="0.00001274322" izz="0.00286701969"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint6" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-0.0175" soft_upper_limit="3.7525"/>
+    <origin rpy="1.57079632679 0 0" xyz="0 0 0"/>
+    <parent link="panda_link5"/>
+    <child link="panda_link6"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="12" lower="-0.0175" upper="3.7525" velocity="2.6100"/>
+    <!-- <dynamics damping="10.0"/>
+    <limit effort="12" lower="-0.0873" upper="3.0" velocity="2.6100"/> -->
+  </joint>
+  <link name="panda_link7">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/link7.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/link7.stl"/>
+      </geometry>
+    </collision>
+        <inertial>
+      <origin rpy="0 0 0" xyz="0.00089 -0.00044 0.05491"/>
+      <mass value="0.35973"/>
+      <inertia ixx="0.00019541063" ixy="0.00000165231" ixz="0.00000148826" iyy="0.00019210361" iyz="-0.00000131132" izz="0.00017936256"/>
+    </inertial>
+  </link>
+  <joint name="panda_joint7" type="revolute">
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    <origin rpy="1.57079632679 0 0" xyz="0.088 0 0"/>
+    <parent link="panda_link6"/>
+    <child link="panda_link7"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="10.0"/>
+    <limit effort="12" lower="-2.8973" upper="2.8973" velocity="2.6100"/>
+  </joint>
+
+  <link name="panda_link8"/>
+  <joint name="panda_joint8" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.107"/>
+    <parent link="panda_link7"/>
+    <child link="panda_link8"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <joint name="panda_hand_joint" type="fixed">
+    <parent link="panda_link8"/>
+    <child link="panda_hand"/>
+
+    <origin rpy="0 0 -0.785398163397" xyz="0 0 0"/>
+  </joint>
+  <link name="panda_hand">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/hand.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/hand.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="panda_leftfinger">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/visual/finger.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/collision/finger.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="panda_rightfinger">
+    <visual>
+      <origin rpy="0 0 3.14159265359" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/finger.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 3.14159265359" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/collision/finger.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="panda_finger_joint1" type="prismatic">
+    <parent link="panda_hand"/>
+    <child link="panda_leftfinger"/>
+    <origin rpy="0 0 0" xyz="0 0 0.0584"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="10.0"/>
+    <limit effort="20" lower="0.0" upper="0.04" velocity="0.2"/>
+  </joint>
+  <joint name="panda_finger_joint2" type="prismatic">
+    <parent link="panda_hand"/>
+    <child link="panda_rightfinger"/>
+    <origin rpy="0 0 0" xyz="0 0 0.0584"/>
+    <axis xyz="0 -1 0"/>
+    <dynamics damping="10.0"/>
+    <limit effort="20" lower="0.0" upper="0.04" velocity="0.2"/>
+  </joint>
+
+  <link name="ee_link"/>
+
+  <joint name="ee_fixed_joint" type="fixed">
+    <parent link="panda_hand"/>
+    <child link="ee_link"/>
+    <origin rpy="0 0.0 0" xyz="0.0 0. 0.1"/>
+  </joint>
+  <link name="right_gripper">
+    <inertial>
+      <!-- Dummy inertial parameters to avoid link lumping-->
+      <mass value="0.01"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </inertial>
+  </link>
+  <joint name="right_gripper" type="fixed">
+    <!--<origin rpy="0 0 2.35619449019" xyz="0 0 0.1"/>-->
+    <origin rpy="0 0 2.35619449019" xyz="0 0 0.207"/>
+    <axis xyz="0 0 1"/>
+    <parent link="panda_link7"/>
+    <!--<parent link="panda_link8"/>-->
+    <child link="right_gripper"/>
+  </joint>
+
+  <!-- All the skins -->
+
+  <!-- LINK 2 SKINS -->
+
+  <link name="link2_skin">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/link2_fancy.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="link2_base_joint" type="fixed">
+    <origin rpy="1.5707 0 0" xyz="0 0 0"/>
+    <parent link="panda_link2"/>
+    <child link="link2_skin"/>
+  </joint>
+  <joint name="link2_sensor_3_joint" type="fixed">
+    <origin rpy="1.670 -0.000 -2.166" xyz="-0.048 0.113 -0.006"/>
+    <axis xyz="-0.824 0.558 -0.099"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_3"/>
+  </joint>
+  <link name="link2_sensor_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_2_joint" type="fixed">
+    <origin rpy="1.526 -0.000 2.508" xyz="0.032 0.053 0.147"/>
+    <axis xyz="0.592 0.805 0.044"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_2"/>
+  </joint>
+  <link name="link2_sensor_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_0_joint" type="fixed">
+    <origin rpy="1.549 -0.000 -2.303" xyz="-0.046 0.040 0.162"/>
+    <axis xyz="-0.744 0.668 0.022"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_0"/>
+  </joint>
+  <link name="link2_sensor_0">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_4_joint" type="fixed">
+    <origin rpy="1.513 -0.000 2.207" xyz="0.050 0.110 0.007"/>
+    <axis xyz="0.803 0.593 0.058"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_4"/>
+  </joint>
+  <link name="link2_sensor_4">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_1_joint" type="fixed">
+    <origin rpy="1.107 0.000 3.050" xyz="0.004 0.074 0.093"/>
+    <axis xyz="0.081 0.89 0.448"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_1"/>
+  </joint>
+  <link name="link2_sensor_1">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_5_joint" type="fixed">
+    <origin rpy="0.869 -0.000 3.063" xyz="0.001 0.117 0.045"/>
+    <axis xyz="0.06 0.761 0.646"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_5"/>
+  </joint>
+  <link name="link2_sensor_5">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link2_sensor_6_joint" type="fixed">
+    <origin rpy="-0.676 -3.142 -0.578" xyz="0.019 0.111 -0.046"/>
+    <axis xyz="0.342 0.524 -0.78"/>
+    <parent link="link2_skin"/>
+    <child link="link2_sensor_6"/>
+  </joint>
+  <link name="link2_sensor_6">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- LINK 4 SKINS -->
+
+  <link name="link3_skin">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/link3_fancy.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="link3_base_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <parent link="panda_link3"/>
+    <child link="link3_skin"/>
+  </joint>
+  <joint name="link3_sensor_5_joint" type="fixed">
+    <origin rpy="1.392 0.000 -3.082" xyz="0.008 0.051 -0.043"/>
+    <axis xyz="-0.059 0.982 0.178"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_5"/>
+  </joint>
+  <link name="link3_sensor_5">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_2_joint" type="fixed">
+    <origin rpy="1.768 -0.000 2.918" xyz="0.097 0.113 -0.015"/>
+    <axis xyz="0.217 0.956 -0.196"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_2"/>
+  </joint>
+  <link name="link3_sensor_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_1_joint" type="fixed">
+    <origin rpy="1.433 0.000 -0.799" xyz="-0.041 -0.037 -0.071"/>
+    <axis xyz="-0.71 -0.691 0.137"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_1"/>
+  </joint>
+  <link name="link3_sensor_1">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_6_joint" type="fixed">
+    <origin rpy="1.189 -0.000 2.713" xyz="0.107 0.106 0.026"/>
+    <axis xyz="0.386 0.844 0.373"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_6"/>
+  </joint>
+  <link name="link3_sensor_6">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_7_joint" type="fixed">
+    <origin rpy="1.084 -0.000 -2.868" xyz="0.067 0.106 0.031"/>
+    <axis xyz="-0.239 0.851 0.468"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_7"/>
+  </joint>
+  <link name="link3_sensor_7">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_4_joint" type="fixed">
+    <origin rpy="1.838 0.000 -2.747" xyz="0.057 0.108 -0.019"/>
+    <axis xyz="-0.371 0.89 -0.264"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_4"/>
+  </joint>
+  <link name="link3_sensor_4">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_0_joint" type="fixed">
+    <origin rpy="1.426 0.000 -2.050" xyz="-0.050 0.023 -0.063"/>
+    <axis xyz="-0.878 0.457 0.145"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_0"/>
+  </joint>
+  <link name="link3_sensor_0">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link3_sensor_3_joint" type="fixed">
+    <origin rpy="-0.311 3.142 -0.185" xyz="0.085 0.086 -0.050"/>
+    <axis xyz="0.056 0.301 -0.952"/>
+    <parent link="link3_skin"/>
+    <child link="link3_sensor_3"/>
+  </joint>
+  <link name="link3_sensor_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- LINK 4 SKINS -->
+
+  <link name="link4_skin">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/link4_fancy.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="link4_base_joint" type="fixed">
+    <origin rpy="-1.5707 0 0" xyz="0 0 0"/>
+    <parent link="panda_link4"/>
+    <child link="link4_skin"/>
+  </joint>
+  <joint name="link4_sensor_0_joint" type="fixed">
+    <origin rpy="1.737 -0.000 -0.054" xyz="-0.075 -0.054 0.047"/>
+    <axis xyz="-0.053 -0.985 -0.165"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_0"/>
+  </joint>
+  <link name="link4_sensor_0">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link4_sensor_4_joint" type="fixed">
+    <origin rpy="1.674 -0.000 -2.632" xyz="-0.112 0.052 0.084"/>
+    <axis xyz="-0.486 0.868 -0.103"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_4"/>
+  </joint>
+  <link name="link4_sensor_4">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link4_sensor_5_joint" type="fixed">
+    <origin rpy="0.791 -0.000 1.064" xyz="0.034 -0.088 0.038"/>
+    <axis xyz="0.622 -0.345 0.703"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_5"/>
+  </joint>
+  <link name="link4_sensor_5">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link4_sensor_1_joint" type="fixed">
+    <origin rpy="1.657 0.000 -0.764" xyz="-0.044 -0.101 -0.003"/>
+    <axis xyz="-0.689 -0.719 -0.086"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_1"/>
+  </joint>
+  <link name="link4_sensor_1">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link4_sensor_2_joint" type="fixed">
+    <origin rpy="0.448 0.000 -0.975" xyz="-0.024 -0.076 0.049"/>
+    <axis xyz="-0.358 -0.243 0.901"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_2"/>
+  </joint>
+  <link name="link4_sensor_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link4_sensor_3_joint" type="fixed">
+    <origin rpy="1.688 -0.000 0.150" xyz="0.010 -0.117 -0.008"/>
+    <axis xyz="0.148 -0.982 -0.117"/>
+    <parent link="link4_skin"/>
+    <child link="link4_sensor_3"/>
+  </joint>
+  <link name="link4_sensor_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- LINK 5 SKINS -->
+
+  <link name="link5_skin">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/link5_spad.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="link5_base_joint" type="fixed">
+    <origin rpy="1.4 3.14 3.14" xyz="0 0.06 -0.083"/>
+    <parent link="panda_link5"/>
+    <child link="link5_skin"/>
+  </joint>
+  <joint name="link5_sensor_0_joint" type="fixed">
+    <origin rpy="0.002 -0.045 0.0" xyz="0.0 -0.039 0.054"/>
+    <axis xyz="-0.045 -0.002 0.999"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_0"/>
+  </joint>
+  <link name="link5_sensor_0">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_1_joint" type="fixed">
+    <origin rpy="-0.084 -0.039 0.002" xyz="-0.002 -0.080 0.058"/>
+    <axis xyz="-0.039 0.084 0.996"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_1"/>
+  </joint>
+  <link name="link5_sensor_1">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_2_joint" type="fixed">
+    <origin rpy="0.031 -0.045 -0.001" xyz="-0.002 0.003 0.055"/>
+    <axis xyz="-0.045 -0.031 0.998"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_2"/>
+  </joint>
+  <link name="link5_sensor_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_3_joint" type="fixed">
+    <origin rpy="0.002 0.389 0.0" xyz="0.023 0.058 0.052"/>
+    <axis xyz="0.379 -0.002 0.925"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_3"/>
+  </joint>
+  <link name="link5_sensor_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_4_joint" type="fixed">
+    <origin rpy="0.825 1.046 0.494" xyz="0.047 -0.108 0.026"/>
+    <axis xyz="0.866 -0.368 0.34"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_4"/>
+  </joint>
+  <link name="link5_sensor_4">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_5_joint" type="fixed">
+    <origin rpy="0.421 -0.049 0.01" xyz="0.003 0.123 0.043"/>
+    <axis xyz="0.049 0.408 0.912"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_5"/>
+  </joint>
+  <link name="link5_sensor_5">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_6_joint" type="fixed">
+    <origin rpy="0.905 -0.097 -0.047" xyz="-0.004 -0.130 0.044"/>
+    <axis xyz="-0.097 -0.783 0.615"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_6"/>
+  </joint>
+  <link name="link5_sensor_6">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link5_sensor_7_joint" type="fixed">
+    <origin rpy="-0.002 -0.376 0.0" xyz="-0.019 0.059 0.054"/>
+    <axis xyz="-0.367 0.002 0.93"/>
+    <parent link="link5_skin"/>
+    <child link="link5_sensor_7"/>
+  </joint>
+  <link name="link5_sensor_7">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.005"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- LINK 6 SKINS -->
+  <link name="link6_skin">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/visual/link6_big.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="link6_base_joint" type="fixed">
+    <origin rpy="-1.57079632679 0 0" xyz="0 0 0"/>
+    <parent link="panda_link6"/>
+    <child link="link6_skin"/>
+  </joint>
+  <joint name="link6_sensor_0_joint" type="fixed">
+    <origin rpy="1.726 0.000 -0.676" xyz="-0.0631 -0.0491 -0.0215"/>
+    <axis xyz="-0.618 -0.771 -0.155"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_0"/>
+  </joint>
+  <link name="link6_sensor_0">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link6_sensor_1_joint" type="fixed">
+    <origin rpy="0.793 0.000 -0.103" xyz="-0.0353 -0.0490 0.0221"/>
+    <axis xyz="-0.073 -0.709 0.702"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_1"/>
+  </joint>
+  <link name="link6_sensor_1">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link6_sensor_2_joint" type="fixed">
+    <origin rpy="1.557 -0.000 1.454" xyz="0.0913 -0.0053 -0.0027"/>
+    <axis xyz="0.993 -0.117 0.014"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_2"/>
+  </joint>
+  <link name="link6_sensor_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link6_sensor_3_joint" type="fixed">
+    <origin rpy="1.563 -0.000 0.126" xyz="0.0078 -0.0561 -0.0028"/>
+    <axis xyz="0.126 -0.992 0.008"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_3"/>
+  </joint>
+  <link name="link6_sensor_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link6_sensor_4_joint" type="fixed">
+    <origin rpy="1.548 -0.000 0.284" xyz="0.0575 -0.0444 -0.0024"/>
+    <axis xyz="0.28 -0.96 0.023"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_4"/>
+  </joint>
+  <link name="link6_sensor_4">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="link6_sensor_5_joint" type="fixed">
+    <origin rpy="1.529 0.000 3.086" xyz="0.0466 0.0474 0.0006"/>
+    <axis xyz="0.055 0.998 0.042"/>
+    <parent link="link6_skin"/>
+    <child link="link6_sensor_5"/>
+  </joint>
+  <link name="link6_sensor_5">
+    <visual>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.0"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+</robot>
+
